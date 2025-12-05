@@ -2,6 +2,28 @@
 #define UNTITLED1_CH9329_H
 #include <Arduino.h>
 
+#if USB_DEBUG
+#ifndef DBG_print
+#define DBG_print(...) Serial.print(__VA_ARGS__)
+#endif
+#ifndef DBG_println
+#define DBG_println(...) Serial.println(__VA_ARGS__)
+#endif
+#ifndef DBG_printf
+#define DBG_printf(...) Serial.printf(__VA_ARGS__)
+#endif
+#else
+#ifndef DBG_print
+#define DBG_print(...)
+#endif
+#ifndef DBG_println
+#define DBG_println(...)
+#endif
+#ifndef DBG_printf
+#define DBG_printf(...)
+#endif
+#endif
+
 #define CH9329COUNT 2
 struct CH9329CFG
 {
@@ -10,10 +32,10 @@ struct CH9329CFG
     int8_t tx_pin;
     pin_size_t cfg1_pin;
     pin_size_t mode1_pin;
-    uint8_t addr = 0x00;
-    uint32_t baud = 9600;
-    int8_t CFG1 = HIGH;
-    int8_t MODE1 = HIGH;
+    uint8_t addr;
+    uint32_t baud;
+    int8_t CFG1;
+    int8_t MODE1;
 };
 enum all_cmd
 {
@@ -323,6 +345,9 @@ public:
     // 添加一个函数来手动处理接收到的单个字节
     void processByte(uint8_t byte);
     uint8_t getIndexByAddr(uint8_t addr);
+
+    void turnOnLed(uint8_t index);
+    void turnOffLed(uint8_t index);
 };
 
 #endif // UNTITLED1_CH9329_H

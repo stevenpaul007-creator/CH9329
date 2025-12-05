@@ -225,7 +225,7 @@ void CH9329::writeUart(uint8_t index, uart_fmt *data)
     data->HEAD[0] = 0x57;
     data->HEAD[1] = 0xAB;
     data->ADDR = _ch9329cfgs[index].addr;
-    printUartFormat(data, true);
+    // printUartFormat(data, true);
 
     _serial->write(data->HEAD[0]);
     _serial->write(data->HEAD[1]);
@@ -289,7 +289,7 @@ void CH9329::readUart()
     while (this->_serial->available())
     {
         uint8_t incomingByte = this->_serial->read();
-        // Serial.printf("%02X ", incomingByte);
+        // DBG_printf("%02X ", incomingByte);
         processByte(incomingByte);
     }
 }
@@ -374,7 +374,7 @@ void CH9329::processByte(uint8_t byte)
     case STATE_GET_SUM:
         // 接收到最后的 SUM 字节
         uint8_t receivedSum = byte;
-        // Serial.printf("receivedSum= %02X, _calculatedSum= %02X, %02X", receivedSum, _calculatedSum, (_calculatedSum & 0xFF));
+        // DBG_printf("receivedSum= %02X, _calculatedSum= %02X, %02X", receivedSum, _calculatedSum, (_calculatedSum & 0xFF));
         // 校验和验证
         // if (receivedSum == (_calculatedSum & 0xFF))
         // {
@@ -399,10 +399,10 @@ void CH9329::processByte(uint8_t byte)
 void CH9329::processValidPacket()
 {
     // 现在我们可以安全地使用 _lastUartData 了
-    printUartFormat(&_lastUartData, false); // 假设这个函数存在
 
     if (_lastUartData.CMD == RET_GETINFO)
     {
+        printUartFormat(&_lastUartData, false); // 假设这个函数存在
         uint8_t index = getIndexByAddr(_lastUartData.ADDR);
         // memcpy 是安全的，因为我们知道数据是完整的
         memcpy(&keyboardStatus[index], &_lastUartData, sizeof(uart_fmt));
@@ -420,6 +420,16 @@ uint8_t CH9329::getIndexByAddr(uint8_t addr)
     }
 
     return 0;
+}
+
+void CH9329::turnOnLed(uint8_t index)
+{
+    digitalWrite(_ch9329cfgs[index].led_pin, LOW);
+}
+
+void CH9329::turnOffLed(uint8_t index)
+{
+    digitalWrite(_ch9329cfgs[index].led_pin, HIGH);
 }
 
 void CH9329::press(uint8_t index, uint8_t hid_code, uint8_t control)
@@ -531,6 +541,11 @@ void CH9329::mouseMoveAbs(uint8_t index, uint16_t x, uint16_t y, uint8_t ms_key,
                        (uint8_t)(y & 0xFF),        // 低 8 位
                        (uint8_t)((y >> 8) & 0xFF), // 高 8 位
                        ms_wheel};
+    DBG_print("ms_key = ");
+    DBG_print(ms_key,BIN);
+    DBG_print("ms_wheel = ");
+    DBG_print(ms_wheel,BIN);
+    DBG_println();
     this->cmdSendMsAbsData(index, data);
 }
 
@@ -592,37 +607,38 @@ uart_fmt *CH9329::getLastUartData()
  */
 void CH9329::printUartFormat(uart_fmt *info, bool isWrite)
 {
+#ifdef USB_DEBUG
     if (isWrite)
     {
-        return;
-        Serial.print(">>>>> ");
+        DBG_print(">>>>> ");
     }
     else
     {
-        Serial.print("<<<<< ");
+        DBG_print("<<<<< ");
     }
 
     // 打印帧头 (HEAD) - 使用十六进制格式
-    Serial.printf("HEAD: %02X, %02X ", info->HEAD[0], info->HEAD[1]);
+    DBG_printf("HEAD: %02X, %02X ", info->HEAD[0], info->HEAD[1]);
 
     // 打印地址码 (ADDR)
-    Serial.printf("ADDR: %02X ", info->ADDR);
+    DBG_printf("ADDR: %02X ", info->ADDR);
 
     // 打印命令码 (CMD)
-    Serial.printf("CMD:  %02X ", info->CMD);
+    DBG_printf("CMD:  %02X ", info->CMD);
 
     // 打印数据长度 (LEN)
-    Serial.printf("LEN: %02X ", info->LEN);
+    DBG_printf("LEN: %02X ", info->LEN);
 
     // 打印后续数据 (DATA)
-    Serial.print("DATA: ");
+    DBG_print("DATA: ");
     // 循环打印 N 个字节的数据
     for (int i = 0; i < (uint8_t)info->LEN; i++)
     {
-        Serial.printf("%02X ", info->DATA[i]);
+        DBG_printf("%02X ", info->DATA[i]);
     }
 
     // 打印累加和 (SUM)
-    Serial.printf("SUM:  %02X\n", info->SUM);
+    DBG_printf("SUM:  %02X\n", info->SUM);
     Serial.flush();
+#endif
 }
