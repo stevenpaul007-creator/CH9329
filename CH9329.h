@@ -213,6 +213,7 @@ private:
     uint8_t _addr;
     uart_fmt _lastUartData{};
     void writeUart( uart_fmt * data );
+    size_t readBytesToBuffer(byte *buffer, size_t length);
     uart_fmt * readUart( uart_fmt *  ) ;
     void cmdSendKbGeneralData(uint8_t * key );
     void cmdSendKbMediaData();
@@ -225,12 +226,12 @@ private:
     uart_fmt cmdGetUsbString();
     uart_fmt cmdSetUsbString();
     uart_fmt cmdSetDefaultCfg();
-    void cmdReset();
 
 public:
     CH9329(  HardwareSerial *serial , uint32_t _baud  = 9600, uint8_t addr = 0x00);
     uart_fmt * cmdGetInfo(uart_fmt * );
     uint8_t sum(uart_fmt * );
+    void cmdReset();
     void press( uint8_t hid_code , uint8_t control = 0 );
     void pressASCII( char key , uint8_t control = 0 );
     void releaseAll();

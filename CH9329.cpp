@@ -211,6 +211,32 @@ uint8_t CH9329::sum(uart_fmt * data){
     return sum_ & 0xFF;
 }
 
+void CH9329::cmdReset()
+{
+    uart_fmt uartData{};
+    uartData.CMD = CMD_RESET;
+    uartData.LEN = 0x00;
+    this->writeUart(&uartData);
+    this->readUart( &this->_lastUartData );
+    return ;
+}
+
+// 辅助函数：安全地从 Serial 读取指定字节数到缓冲区
+// 返回实际读取到的字节数
+size_t CH9329::readBytesToBuffer(byte *buffer, size_t length) {
+    size_t count = 0;
+    while (count < length) {
+        if (this->_serial->available()) {
+            *buffer++ = (byte)this->_serial->read();
+            count++;
+        } else {
+            // 如果需要，可以在此处添加超时逻辑
+            // delay(1); // 可以根据需要调整或删除
+        }
+    }
+    return count;
+}
+
 uart_fmt* CH9329::readUart( uart_fmt * info)  {
     for (int i = 0; i < 200; ++i) {
         if (this->_serial->available() ) {
@@ -222,9 +248,27 @@ uart_fmt* CH9329::readUart( uart_fmt * info)  {
         }
         delay(1);
     }
-    _serial->read( (byte *)info , 5 );
-    _serial->read( (byte *)&(info->DATA) , info->LEN );
-    _serial->read( (byte *)&(info->SUM) , 1 );
+    // 1. 读取前 5 个字节（HEAD[2], LEN, ADDR, CMD）
+    // 将整个 info 结构体指针转换为 byte*，读取前 5 个字节覆盖结构体开头
+    if (readBytesToBuffer((byte *)info, 5) != 5) {
+        // 处理读取失败的情况，例如设置错误码
+        // info->HEAD[0] = 0xFF; 
+        return info; 
+    }
+
+    // 2. 读取 DATA 区域（长度由 info->LEN 决定）
+    if (info->LEN > 0) {
+        if (readBytesToBuffer((byte *)&(info->DATA), info->LEN) != info->LEN) {
+             // 处理读取失败的情况
+            return info; 
+        }
+    }
+
+    // 3. 读取最后一个字节（SUM）
+    if (readBytesToBuffer((byte *)&(info->SUM), 1) != 1) {
+         // 处理读取失败的情况
+        return info; 
+    }
     return info;
 }
 
