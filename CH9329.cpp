@@ -136,8 +136,23 @@ const uint8_t _asciimap[128] PROGMEM =
         0             // DEL
 };
 
+SemaphoreHandle_t ch9329_mutex; // 声明一个互斥锁句柄
+__attribute__((weak)) void kvm_change_keyboard_leds_cb(uint8_t index, uint8_t leds)
+{
+    (void)index;
+    (void)leds;
+}
 CH9329::CH9329(SerialUART *serial, struct CH9329CFG *ch9329cfgs)
 {
+    // 创建一个互斥信号量
+    ch9329_mutex = xSemaphoreCreateMutex();
+    if (ch9329_mutex == NULL)
+    {
+        // 互斥锁创建失败，可能内存不足或系统错误
+        DBG_println("Error: Failed to create CH9329 mutex!");
+        while (1)
+            ; // 停止程序
+    }
     this->_serial = serial;
     _ch9329cfgs = ch9329cfgs;
     _serial->setPinout(_ch9329cfgs[0].rx_pin, _ch9329cfgs[0].tx_pin);
@@ -188,6 +203,20 @@ void CH9329::cmdSendKbGeneralData(uint8_t index, uint8_t *key)
     return;
 }
 
+void CH9329::cmdSendKbMediaData(uint8_t index, uint8_t *key)
+{
+    uart_fmt data{};
+    data.CMD = CMD_SEND_KB_MEDIA_DATA;
+    data.LEN = 0x02;
+    for (int i = 0; i < data.LEN; ++i)
+    {
+        data.DATA[i] = key[i];
+    }
+    this->writeUart(index, &data);
+    // this->readUart(&this->_lastUartData);
+    return;
+}
+
 void CH9329::cmdSendMsAbsData(uint8_t index, uint8_t *data)
 {
     uart_fmt uartData{};
@@ -222,23 +251,27 @@ void CH9329::cmdSendMsRelData(uint8_t index, uint8_t *data)
 
 void CH9329::writeUart(uint8_t index, uart_fmt *data)
 {
-    data->HEAD[0] = 0x57;
-    data->HEAD[1] = 0xAB;
-    data->ADDR = _ch9329cfgs[index].addr;
-    // printUartFormat(data, true);
-
-    _serial->write(data->HEAD[0]);
-    _serial->write(data->HEAD[1]);
-    _serial->write(data->ADDR);
-    _serial->write(data->CMD);
-    _serial->write(data->LEN);
-
-    for (int i = 0; i < data->LEN; ++i)
+    if (xSemaphoreTake(ch9329_mutex, pdMS_TO_TICKS(100)) == pdTRUE)
     {
-        _serial->write(data->DATA[i]);
-    }
+        data->HEAD[0] = 0x57;
+        data->HEAD[1] = 0xAB;
+        data->ADDR = _ch9329cfgs[index].addr;
+        // printUartFormat(data, true);
 
-    _serial->write(this->sum(data));
+        _serial->write(data->HEAD[0]);
+        _serial->write(data->HEAD[1]);
+        _serial->write(data->ADDR);
+        _serial->write(data->CMD);
+        _serial->write(data->LEN);
+
+        for (int i = 0; i < data->LEN; ++i)
+        {
+            _serial->write(data->DATA[i]);
+        }
+
+        _serial->write(this->sum(data));
+        xSemaphoreGive(ch9329_mutex);
+    }
 }
 
 uint8_t CH9329::sum(uart_fmt *data)
@@ -285,12 +318,17 @@ size_t CH9329::readBytesToBuffer(byte *buffer, size_t length)
 
 void CH9329::readUart()
 {
-    // 只要串口有数据可用，就持续读取并处理
-    while (this->_serial->available())
+
+    if (xSemaphoreTake(ch9329_mutex, pdMS_TO_TICKS(100)) == pdTRUE)
     {
-        uint8_t incomingByte = this->_serial->read();
-        // DBG_printf("%02X ", incomingByte);
-        processByte(incomingByte);
+        // 只要串口有数据可用，就持续读取并处理
+        while (this->_serial->available())
+        {
+            uint8_t incomingByte = this->_serial->read();
+            // DBG_printf("%02X ", incomingByte);
+            processByte(incomingByte);
+        }
+        xSemaphoreGive(ch9329_mutex);
     }
 }
 
@@ -406,6 +444,7 @@ void CH9329::processValidPacket()
         uint8_t index = getIndexByAddr(_lastUartData.ADDR);
         // memcpy 是安全的，因为我们知道数据是完整的
         memcpy(&keyboardStatus[index], &_lastUartData, sizeof(uart_fmt));
+        kvm_change_keyboard_leds_cb(index, keyboardStatus[index].DATA[2]);
     }
 }
 
@@ -432,9 +471,15 @@ void CH9329::turnOffLed(uint8_t index)
     digitalWrite(_ch9329cfgs[index].led_pin, HIGH);
 }
 
-void CH9329::press(uint8_t index, uint8_t hid_code, uint8_t control)
+void CH9329::press(uint8_t index, uint8_t control,
+                   uint8_t hid_code0,
+                   uint8_t hid_code1,
+                   uint8_t hid_code2,
+                   uint8_t hid_code3,
+                   uint8_t hid_code4,
+                   uint8_t hid_code5)
 {
-    uint8_t data[8] = {control, 0, hid_code, 0, 0, 0, 0, 0};
+    uint8_t data[8] = {control, 0, hid_code0, hid_code1, hid_code2, hid_code3, hid_code4, hid_code5};
     this->cmdSendKbGeneralData(index, data);
     return;
 }
@@ -542,9 +587,9 @@ void CH9329::mouseMoveAbs(uint8_t index, uint16_t x, uint16_t y, uint8_t ms_key,
                        (uint8_t)((y >> 8) & 0xFF), // 高 8 位
                        ms_wheel};
     DBG_print("ms_key = ");
-    DBG_print(ms_key,BIN);
+    DBG_print(ms_key, BIN);
     DBG_print("ms_wheel = ");
-    DBG_print(ms_wheel,BIN);
+    DBG_print(ms_wheel, BIN);
     DBG_println();
     this->cmdSendMsAbsData(index, data);
 }

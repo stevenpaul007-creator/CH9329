@@ -2,6 +2,9 @@
 #define UNTITLED1_CH9329_H
 #include <Arduino.h>
 
+#include "FreeRTOS.h" // 包含 FreeRTOS 头文件
+#include "semphr.h"   // 包含信号量和互斥锁相关的头文件
+
 #if USB_DEBUG
 #ifndef DBG_print
 #define DBG_print(...) Serial.print(__VA_ARGS__)
@@ -259,7 +262,7 @@ private:
     uart_fmt keyboardStatus[CH9329COUNT];
     uart_fmt _lastUartData{};
     void cmdSendKbGeneralData(uint8_t index, uint8_t *key);
-    void cmdSendKbMediaData(uint8_t index);
+    void cmdSendKbMediaData(uint8_t index, uint8_t *key);
     /**
      * 通过该命令向芯片发送绝对鼠标数据包，模拟绝对鼠标相关动作(包括左中右键按下与释放、滚
      * 轮上下滚动、上下左右移动)。
@@ -309,7 +312,13 @@ public:
     void cmdGetInfo(uint8_t index);
     static uint8_t sum(uart_fmt *);
     void cmdReset(uint8_t index);
-    void press(uint8_t index, uint8_t hid_code, uint8_t control = 0);
+    void press(uint8_t index, uint8_t control,
+               uint8_t hid_code0,
+               uint8_t hid_code1,
+               uint8_t hid_code2,
+               uint8_t hid_code3,
+               uint8_t hid_code4,
+               uint8_t hid_code5);
     void pressASCII(uint8_t index, char key, uint8_t control = 0);
     void releaseAll(uint8_t index);
     void sendString(uint8_t index, char *string, uint8_t len);
