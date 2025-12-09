@@ -586,11 +586,6 @@ void CH9329::mouseMoveAbs(uint8_t index, uint16_t x, uint16_t y, uint8_t ms_key,
                        (uint8_t)(y & 0xFF),        // 低 8 位
                        (uint8_t)((y >> 8) & 0xFF), // 高 8 位
                        ms_wheel};
-    DBG_print("ms_key = ");
-    DBG_print(ms_key, BIN);
-    DBG_print("ms_wheel = ");
-    DBG_print(ms_wheel, BIN);
-    DBG_println();
     this->cmdSendMsAbsData(index, data);
 }
 
@@ -652,7 +647,7 @@ uart_fmt *CH9329::getLastUartData()
  */
 void CH9329::printUartFormat(uart_fmt *info, bool isWrite)
 {
-#ifdef USB_DEBUG
+#if USB_DEBUG && USB_DEBUG_SENSITIVE
     if (isWrite)
     {
         DBG_print(">>>>> ");
